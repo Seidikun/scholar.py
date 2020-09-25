@@ -166,6 +166,7 @@ import os
 import re
 import sys
 import warnings
+from bs4 import NavigableString, Tag
 
 try:
     # Try importing for Python 3
@@ -567,9 +568,18 @@ class ScholarArticleParser120726(ScholarArticleParser):
         for tag in div:
             if not hasattr(tag, 'name'):
                 continue
+              
             if str(tag).lower().find('.pdf'):
-                if tag.find('div', {'class': 'gs_ttss'}):
-                    self._parse_links(tag.find('div', {'class': 'gs_ttss'}))
+                if isinstance(tag, NavigableString):
+                    continue
+                if isinstance(tag, Tag):                 
+                    if tag.find('div', {'class': 'gs_or_ggsm'}):
+                        self._parse_links(tag.find('div', {'class': 'gs_or_ggsm'}))
+# =============================================================================
+#             if str(tag).lower().find('.pdf'):
+#                 if tag.find('div', {'class': 'gs_ttss'}):
+#                     self._parse_links(tag.find('div', {'class': 'gs_ttss'}))
+# =============================================================================
 
             if tag.name == 'div' and self._tag_has_class(tag, 'gs_ri'):
                 # There are (at least) two formats here. In the first
@@ -1308,3 +1318,4 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
 
 if __name__ == "__main__":
     sys.exit(main())
+    
