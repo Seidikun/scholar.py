@@ -167,6 +167,7 @@ import re
 import sys
 import warnings
 from bs4 import NavigableString, Tag
+import csv
 
 try:
     # Try importing for Python 3
@@ -780,6 +781,7 @@ class SearchScholarQuery(ScholarQuery):
         self.scope_title = False # If True, search in title only
         self.author = None
         self.pub = None
+        self.start = None
         self.timeframe = [None, None]
         self.include_patents = True
         self.include_citations = True
@@ -815,6 +817,10 @@ class SearchScholarQuery(ScholarQuery):
         """Sets the publication in which the result must be found."""
         self.pub = pub
 
+    def set_start(self,start):
+        """Sets the offset of results, can be used to circumvent pagination."""
+        self.start = start
+      
     def set_timeframe(self, start=None, end=None):
         """
         Sets timeframe (in years as integer) in which result must have
@@ -852,17 +858,18 @@ class SearchScholarQuery(ScholarQuery):
         if self.words_none:
             words_none = self._parenthesize_phrases(self.words_none)
 
-        urlargs = {'words': self.words or '',
-                   'words_some': words_some or '',
-                   'words_none': words_none or '',
-                   'phrase': self.phrase or '',
-                   'scope': 'title' if self.scope_title else 'any',
-                   'authors': self.author or '',
-                   'pub': self.pub or '',
-                   'ylo': self.timeframe[0] or '',
-                   'yhi': self.timeframe[1] or '',
-                   'patents': '0' if self.include_patents else '1',
-                   'citations': '0' if self.include_citations else '1'}
+        urlargs = {'words':       self.words or '',
+                   'words_some':  words_some or '',
+                   'words_none':  words_none or '',
+                   'phrase':      self.phrase or '',
+                   'scope':       'title' if self.scope_title else 'any',
+                   'authors':     self.author or '',
+                   'start':       self.start or '',
+                   'pub':         self.pub or '',
+                   'ylo':         self.timeframe[0] or '',
+                   'yhi':         self.timeframe[1] or '',
+                   'patents':     '0' if self.include_patents else '1',
+                   'citations':   '0' if self.include_citations else '1'}
 
         for key, val in urlargs.items():
             urlargs[key] = quote(encode(val))
@@ -1142,12 +1149,20 @@ def txt(querier, with_globals):
     for art in articles:
         print(encode(art.as_txt()) + '\n')
 
-def csv(querier, header=False, sep='|'):
+def csv_show(querier, header=False, sep='|'):
     articles = querier.articles
     for art in articles:
         result = art.as_csv(header=header, sep=sep)
         print(encode(result))
         header = False
+
+def csv_save(writer, querier, header=False, sep='|'):
+
+  articles = querier.articles
+  for art in articles:
+        result = art.as_csv(header=header, sep=sep)
+        writer.writerow([result])
+        header = False  
 
 def citation_export(querier):
     articles = querier.articles
@@ -1187,6 +1202,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Results must contain exact phrase')
     group.add_option('-t', '--title-only', action='store_true', default=False,
                      help='Search title only')
+    group.add_option('-S', '--start', metavar='START', default = None,
+                     help='Select results starting from here, can be used to circumvent pagination')
     group.add_option('-P', '--pub', metavar='PUBLICATIONS', default=None,
                      help='Results must have appeared in this publication')
     group.add_option('--after', metavar='YEAR', default=None,
@@ -1287,6 +1304,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
             query.set_phrase(options.phrase)
         if options.title_only:
             query.set_scope(True)
+        if options.start:
+            query.set_start(options.start)
         if options.pub:
             query.set_pub(options.pub)
         if options.after or options.before:
@@ -1303,9 +1322,12 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     querier.send_query(query)
 
     if options.csv:
-        csv(querier)
+        csv_show(querier)
     elif options.csv_header:
-        csv(querier, header=True)
+        writer = csv.writer(open("results.csv", 'w'))        
+        csv_show(querier, header=True)
+        csv_save(writer, querier, header=True)
+        
     elif options.citation is not None:
         citation_export(querier)
     else:
